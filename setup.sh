@@ -6,7 +6,7 @@
 #
 # What this script does:
 #   1. Installs system packages (Python 3, pip, Tkinter, Git).
-#   1b. Upgrades to the latest supported Python (3.11+) when the system
+#   1b. Upgrades to the latest supported Python (3.11+ ... 3.14) when the system
 #       default is too old (e.g. Python 3.9 on Raspberry Pi OS Bullseye).
 #       - First tries apt (works on Pi OS Bookworm and newer).
 #       - Falls back to pyenv + build-from-source (works on Bullseye; slow).
@@ -26,7 +26,7 @@ SERVICE_DIR="${HOME}/.config/systemd/user"
 MIN_PY_MINOR=11   # i.e. Python 3.11
 
 # Python version to build via pyenv when apt cannot provide a new enough one.
-PYENV_PYTHON_VERSION="3.13.2"
+PYENV_PYTHON_VERSION="3.14.0"
 
 # ── Colour helpers ─────────────────────────────────────────────────────────────
 info()  { echo -e "\033[1;34m[INFO]\033[0m  $*"; }
@@ -72,7 +72,7 @@ fi
 #    python3.13 / python3.12 / python3.11 packages are available).
 if [ -z "${PYTHON_BIN}" ]; then
     info "System python3 is below Python 3.${MIN_PY_MINOR}. Trying apt…"
-    for ver in 3.13 3.12 3.11; do
+    for ver in 3.14 3.13 3.12 3.11; do
         if sudo apt-get install -y -q "python${ver}" "python${ver}-venv" 2>/dev/null \
                 && _py_meets_minimum "python${ver}"; then
             PYTHON_BIN="python${ver}"

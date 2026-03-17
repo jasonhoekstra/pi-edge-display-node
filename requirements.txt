@@ -1,14 +1,15 @@
 # Cryptography – pinned explicitly so pip selects a pre-built binary wheel
 # (manylinux wheels exist for linux/x86_64, linux/aarch64, and linux/armv7l)
 # rather than attempting a Rust-based source build that fails on bare Raspberry Pi OS.
-cryptography>=41.0.0
+# 44.0.0+ is required for Python 3.14 binary wheel availability.
+cryptography>=44.0.0
 
 # Core Google API client libraries
-google-api-python-client>=2.120.0
-google-auth>=2.28.0
+google-api-python-client>=2.160.0
+google-auth>=2.38.0
 google-auth-httplib2>=0.2.0
 google-auth-oauthlib>=1.2.0
 
 # HTTP transport (google-auth uses requests internally for token refresh)
-requests>=2.31.0
-urllib3>=2.2.0
+requests>=2.32.0
+urllib3>=2.3.0
