@@ -24,20 +24,6 @@ ok()    { echo -e "\033[1;32m[ OK ]\033[0m  $*"; }
 warn()  { echo -e "\033[1;33m[WARN]\033[0m  $*"; }
 error() { echo -e "\033[1;31m[ERR ]\033[0m  $*" >&2; }
 
-# ── Root check ─────────────────────────────────────────────────────────────────
-if [ "$(id -u)" -eq 0 ]; then
-    warn "You are running setup.sh as root."
-    warn "This will create root-owned files (.venv, token, etc.) that the"
-    warn "regular Pi user will not be able to use."
-    warn "It is strongly recommended to run this script as your normal user."
-    echo ""
-    read -rp "Continue as root anyway? [y/N] " _ROOT_CONTINUE
-    if [[ "${_ROOT_CONTINUE,,}" != "y" ]]; then
-        info "Exiting. Run again as your normal user (e.g. 'pi')."
-        exit 0
-    fi
-fi
-
 # ── 1. System packages ─────────────────────────────────────────────────────────
 info "Updating package lists…"
 sudo apt-get update -q
