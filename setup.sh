@@ -6,7 +6,11 @@
 #
 # What this script does:
 #   1. Installs system packages (Python 3, pip, Tkinter, Git).
-#   2. Creates a Python virtual environment in .venv.
+#   1b. Upgrades to the latest supported Python (3.11+) when the system
+#       default is too old (e.g. Python 3.9 on Raspberry Pi OS Bullseye).
+#       - First tries apt (works on Pi OS Bookworm and newer).
+#       - Falls back to pyenv + build-from-source (works on Bullseye; slow).
+#   2. Creates a Python virtual environment in .venv using the selected Python.
 #   3. Installs Python dependencies from requirements.txt.
 #   4. Reminds the user to place credentials.json and set SPREADSHEET_ID.
 #   5. Optionally installs a systemd user service to auto-start on login.
@@ -17,6 +21,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${SCRIPT_DIR}/.venv"
 SERVICE_NAME="pi-edge-display.service"
 SERVICE_DIR="${HOME}/.config/systemd/user"
+
+# Minimum Python version required by the application and its dependencies.
+MIN_PY_MINOR=11   # i.e. Python 3.11
+
+# Python version to build via pyenv when apt cannot provide a new enough one.
+PYENV_PYTHON_VERSION="3.13.2"
 
 # ── Colour helpers ─────────────────────────────────────────────────────────────
 info()  { echo -e "\033[1;34m[INFO]\033[0m  $*"; }
@@ -42,10 +52,89 @@ sudo apt-get install -y -q \
 
 ok "System packages installed."
 
+# ── 1b. Ensure Python 3.${MIN_PY_MINOR}+ is available ─────────────────────────
+# Helper: return 0 if the given binary meets the minimum version.
+_py_meets_minimum() {
+    local bin="$1"
+    command -v "${bin}" &>/dev/null || return 1
+    "${bin}" -c "import sys; sys.exit(0 if sys.version_info >= (3, ${MIN_PY_MINOR}) else 1)" 2>/dev/null
+}
+
+PYTHON_BIN=""
+
+# 1. Check whether the system python3 is already new enough (true on Pi OS Bookworm).
+if _py_meets_minimum python3; then
+    PYTHON_BIN="python3"
+    ok "System python3 meets the minimum (Python 3.${MIN_PY_MINOR}+)."
+fi
+
+# 2. If not, try to install a newer Python from apt (works on Bookworm where
+#    python3.13 / python3.12 / python3.11 packages are available).
+if [ -z "${PYTHON_BIN}" ]; then
+    info "System python3 is below Python 3.${MIN_PY_MINOR}. Trying apt…"
+    for ver in 3.13 3.12 3.11; do
+        if sudo apt-get install -y -q "python${ver}" "python${ver}-venv" 2>/dev/null \
+                && _py_meets_minimum "python${ver}"; then
+            PYTHON_BIN="python${ver}"
+            # Best-effort: also install the version-specific tkinter package.
+            sudo apt-get install -y -q "python${ver}-tk" 2>/dev/null || true
+            ok "Installed Python ${ver} via apt."
+            break
+        fi
+    done
+fi
+
+# 3. Last resort: install pyenv and build Python from source.
+#    This path is typically hit on Raspberry Pi OS Bullseye (ships Python 3.9).
+#    WARNING: compiling CPython on a Raspberry Pi can take 20–40 minutes.
+if [ -z "${PYTHON_BIN}" ]; then
+    warn "apt could not provide Python 3.${MIN_PY_MINOR}+."
+    warn "Falling back to pyenv – building Python ${PYENV_PYTHON_VERSION} from source."
+    warn "This may take 20–40 minutes on a Raspberry Pi. Please be patient."
+
+    # Install build dependencies required by CPython.
+    info "Installing CPython build dependencies…"
+    sudo apt-get install -y -q \
+        libreadline-dev \
+        libbz2-dev \
+        libncursesw5-dev \
+        libsqlite3-dev \
+        liblzma-dev \
+        libgdbm-dev \
+        uuid-dev \
+        tk-dev
+
+    PYENV_ROOT="${HOME}/.pyenv"
+
+    if [ ! -d "${PYENV_ROOT}" ]; then
+        info "Cloning pyenv into ${PYENV_ROOT}…"
+        git clone --depth 1 https://github.com/pyenv/pyenv.git "${PYENV_ROOT}"
+    else
+        info "pyenv already present at ${PYENV_ROOT} – skipping clone."
+    fi
+
+    export PYENV_ROOT
+    export PATH="${PYENV_ROOT}/bin:${PATH}"
+    eval "$(pyenv init -)"
+
+    if ! pyenv versions --bare | grep -qx "${PYENV_PYTHON_VERSION}"; then
+        info "Building Python ${PYENV_PYTHON_VERSION} (this takes a while)…"
+        pyenv install "${PYENV_PYTHON_VERSION}"
+    else
+        info "Python ${PYENV_PYTHON_VERSION} already built in pyenv."
+    fi
+
+    PYTHON_BIN="${PYENV_ROOT}/versions/${PYENV_PYTHON_VERSION}/bin/python3"
+    ok "Python ${PYENV_PYTHON_VERSION} available via pyenv."
+fi
+
+PY_VER="$("${PYTHON_BIN}" -c "import sys; print('{}.{}.{}'.format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))")"
+info "Using Python ${PY_VER} (${PYTHON_BIN})"
+
 # ── 2. Virtual environment ─────────────────────────────────────────────────────
 if [ ! -d "${VENV_DIR}" ]; then
     info "Creating Python virtual environment at ${VENV_DIR}…"
-    python3 -m venv "${VENV_DIR}"
+    "${PYTHON_BIN}" -m venv "${VENV_DIR}"
     ok "Virtual environment created."
 else
     info "Virtual environment already exists – skipping creation."
@@ -120,6 +209,6 @@ else
 fi
 
 echo ""
-ok "Setup complete."
+ok "Setup complete.  Python ${PY_VER} is active in the virtual environment."
 info "Run the application with:"
 info "  cd ${SCRIPT_DIR} && .venv/bin/python main.py"
