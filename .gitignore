@@ -1,3 +1,6 @@
+# OAuth 2.0 client secrets – NEVER commit to version control
+credentials.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
