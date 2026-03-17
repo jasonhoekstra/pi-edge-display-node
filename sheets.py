@@ -9,6 +9,8 @@ All API calls are made over HTTPS (enforced by the Google API client library),
 satisfying the requirement for SSL encryption in transit.
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from typing import Any
