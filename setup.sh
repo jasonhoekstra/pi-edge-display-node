@@ -35,7 +35,10 @@ sudo apt-get install -y -q \
     python3-venv \
     python3-tk \
     git \
-    ca-certificates
+    ca-certificates \
+    libssl-dev \
+    libffi-dev \
+    build-essential
 
 ok "System packages installed."
 
@@ -51,7 +54,7 @@ fi
 # ── 3. Python dependencies ─────────────────────────────────────────────────────
 info "Installing Python dependencies…"
 "${VENV_DIR}/bin/pip" install --upgrade pip --quiet
-"${VENV_DIR}/bin/pip" install -r "${SCRIPT_DIR}/requirements.txt" --quiet
+"${VENV_DIR}/bin/pip" install -r "${SCRIPT_DIR}/requirements.txt" --quiet --prefer-binary
 ok "Python dependencies installed."
 
 # ── 4. Credentials reminder ────────────────────────────────────────────────────
