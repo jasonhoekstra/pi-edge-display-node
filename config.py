@@ -49,6 +49,7 @@ DATETIME_FORMATS = [
 
 # ── Display settings ──────────────────────────────────────────────────────────
 REFRESH_INTERVAL_MS = 60_000   # Refresh messages every 60 s (overridable via Configuration sheet)
+SLIDE_INTERVAL_MS = 30_000     # Show each slide for 30 s before advancing to the next
 FONT_FAMILY = "Helvetica"
 FONT_SIZE = 36
 BACKGROUND_COLOR = "#000000"

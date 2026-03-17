@@ -43,16 +43,19 @@ class TestBulletinDisplay:
         display = BulletinDisplay.__new__(BulletinDisplay)
         display._root = tk_root
         display._get_messages = lambda: messages
+        display._messages = list(messages)
+        display._current_slide = 0
         display._setup_window()
         display._build_widgets()
         return display
 
     def test_renders_active_messages(self, tk_root):
         display = self._make_display(tk_root, ["Hello World", "Second message"])
-        display._render_messages(["Hello World", "Second message"])
+        # Only the first slide (index 0) should be visible.
+        display._render_messages(["Hello World"])
         content = display._text_widget.get("1.0", "end").strip()
         assert "Hello World" in content
-        assert "Second message" in content
+        assert "Second message" not in content
 
     def test_renders_no_messages_placeholder(self, tk_root):
         display = self._make_display(tk_root, [])
@@ -78,11 +81,13 @@ class TestBulletinDisplay:
         ts = display._timestamp_var.get()
         assert "Error at" in ts
 
-    def test_bullet_character_present_in_messages(self, tk_root):
-        display = self._make_display(tk_root, ["Test"])
-        display._render_messages(["Test"])
+    def test_slide_shows_single_message_not_bullet_list(self, tk_root):
+        display = self._make_display(tk_root, ["Slide One", "Slide Two"])
+        display._render_messages(["Slide One"])
         content = display._text_widget.get("1.0", "end")
-        assert "\u2022" in content
+        assert "Slide One" in content
+        # Slide mode does not use bullet characters.
+        assert "\u2022" not in content
 
     def test_exit_fullscreen_disables_fullscreen(self, tk_root):
         display = self._make_display(tk_root, [])
@@ -116,3 +121,66 @@ class TestBulletinDisplay:
         display._refresh()
         content = display._text_widget.get("1.0", "end").strip()
         assert content  # some error text was rendered
+
+    def test_render_current_slide_shows_first_message(self, tk_root):
+        display = self._make_display(tk_root, ["First", "Second", "Third"])
+        display._current_slide = 0
+        display._render_current_slide()
+        content = display._text_widget.get("1.0", "end").strip()
+        assert "First" in content
+        assert "Second" not in content
+
+    def test_render_current_slide_advances_correctly(self, tk_root):
+        display = self._make_display(tk_root, ["First", "Second", "Third"])
+        display._current_slide = 1
+        display._render_current_slide()
+        content = display._text_widget.get("1.0", "end").strip()
+        assert "Second" in content
+        assert "First" not in content
+
+    def test_advance_slide_cycles_through_messages(self, tk_root):
+        display = self._make_display(tk_root, ["A", "B", "C"])
+        display._current_slide = 0
+        # Manually call _advance_slide without rescheduling (override after).
+        display._root = tk_root
+
+        # Patch root.after to be a no-op for this test.
+        original_after = tk_root.after
+        tk_root.after = lambda *args, **kwargs: None
+
+        display._advance_slide()
+        assert display._current_slide == 1
+
+        display._advance_slide()
+        assert display._current_slide == 2
+
+        # Should wrap around to 0.
+        display._advance_slide()
+        assert display._current_slide == 0
+
+        tk_root.after = original_after
+
+    def test_advance_slide_single_message_stays_at_zero(self, tk_root):
+        display = self._make_display(tk_root, ["Only"])
+        display._current_slide = 0
+        display._render_current_slide()  # Render initial content.
+
+        original_after = tk_root.after
+        tk_root.after = lambda *args, **kwargs: None
+
+        display._advance_slide()
+        assert display._current_slide == 0  # should not advance
+
+        # The displayed content should still be the single message.
+        content = display._text_widget.get("1.0", "end").strip()
+        assert "Only" in content
+
+        tk_root.after = original_after
+
+    def test_refresh_resets_slide_index_when_out_of_range(self, tk_root):
+        display = self._make_display(tk_root, ["A", "B", "C"])
+        display._current_slide = 5  # out of range
+        # Return only 2 messages this refresh.
+        display._get_messages = lambda: ["X", "Y"]
+        display._refresh()
+        assert display._current_slide == 0

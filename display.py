@@ -5,10 +5,12 @@ Layout
 ──────
 • Black background, white text – high contrast for a dedicated display panel.
 • Header bar showing the application title and last-refresh timestamp.
-• Central area listing each active message as a bullet point (•).
+• Central area showing one active message at a time as a rotating slide.
 • "No active messages" placeholder when the sheet has nothing to show.
 • Messages are refreshed on a timer (default 60 s) by calling back into the
   data layer – no local data is persisted between refreshes.
+• Each slide is shown for a configurable interval (default 30 s) before
+  automatically advancing to the next slide.
 
 Controls (for operator use)
 ───────────────────────────
@@ -29,6 +31,7 @@ from config import (
     FONT_FAMILY,
     FONT_SIZE,
     REFRESH_INTERVAL_MS,
+    SLIDE_INTERVAL_MS,
     TEXT_COLOR,
     TITLE_TEXT,
 )
@@ -38,7 +41,8 @@ logger = logging.getLogger(__name__)
 
 class BulletinDisplay:
     """
-    Manages a full-screen Tkinter window that displays active bulletin messages.
+    Manages a full-screen Tkinter window that displays active bulletin messages
+    as rotating slides – one message per slide, advancing every *slide_interval_ms*.
 
     Parameters
     ----------
@@ -54,6 +58,9 @@ class BulletinDisplay:
     refresh_interval_ms:
         Optional refresh interval in milliseconds.  Defaults to
         ``config.REFRESH_INTERVAL_MS``.
+    slide_interval_ms:
+        Optional interval between slide advances in milliseconds.  Defaults to
+        ``config.SLIDE_INTERVAL_MS``.
     """
 
     def __init__(
@@ -63,6 +70,7 @@ class BulletinDisplay:
         *,
         title_text: str | None = None,
         refresh_interval_ms: int | None = None,
+        slide_interval_ms: int | None = None,
     ) -> None:
         self._root = root
         self._get_messages = get_messages_fn
@@ -70,10 +78,17 @@ class BulletinDisplay:
         self._refresh_interval_ms = (
             refresh_interval_ms if refresh_interval_ms is not None else REFRESH_INTERVAL_MS
         )
+        self._slide_interval_ms = (
+            slide_interval_ms if slide_interval_ms is not None else SLIDE_INTERVAL_MS
+        )
+        self._messages: list[str] = []
+        self._current_slide: int = 0
         self._setup_window()
         self._build_widgets()
         # Schedule the first refresh immediately once the event loop starts.
         self._root.after(0, self._refresh)
+        # Begin the slide-rotation timer.
+        self._root.after(self._slide_interval_ms, self._advance_slide)
 
     # ── Window setup ──────────────────────────────────────────────────────────
 
@@ -143,27 +158,47 @@ class BulletinDisplay:
     # ── Refresh logic ─────────────────────────────────────────────────────────
 
     def _refresh(self) -> None:
-        """Fetch current messages and update the display."""
+        """Fetch current messages, update the slide deck, and show the current slide."""
         try:
             messages = self._get_messages()
-            self._render_messages(messages)
+            self._messages = messages
+            # Reset to first slide if there are messages and the index is out of range.
+            if self._messages and self._current_slide >= len(self._messages):
+                self._current_slide = 0
+            self._render_current_slide()
         except Exception as exc:  # noqa: BLE001
             logger.error("Error fetching messages: %s", exc)
+            self._messages = []
+            self._current_slide = 0
             self._render_error(str(exc))
 
         # Schedule next refresh.
         self._root.after(self._refresh_interval_ms, self._refresh)
 
+    def _advance_slide(self) -> None:
+        """Advance to the next slide and reschedule."""
+        if len(self._messages) > 1:
+            self._current_slide = (self._current_slide + 1) % len(self._messages)
+            self._render_current_slide()
+        # Always reschedule so the timer keeps running.
+        self._root.after(self._slide_interval_ms, self._advance_slide)
+
+    def _render_current_slide(self) -> None:
+        """Render the message at *_current_slide* index."""
+        if self._messages:
+            self._render_messages([self._messages[self._current_slide]])
+        else:
+            self._render_messages([])
+
     def _render_messages(self, messages: list[str]) -> None:
-        """Update the text widget with *messages*."""
+        """Update the text widget with the first element of *messages* as a slide."""
         self._timestamp_var.set(f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
         self._text_widget.config(state=tk.NORMAL)
         self._text_widget.delete("1.0", tk.END)
 
         if messages:
-            for msg in messages:
-                self._text_widget.insert(tk.END, f"\u2022  {msg}\n")
+            self._text_widget.insert(tk.END, messages[0])
         else:
             self._text_widget.insert(
                 tk.END, "No active messages at this time.", "placeholder"
