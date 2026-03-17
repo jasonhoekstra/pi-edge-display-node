@@ -23,6 +23,8 @@ auth library.  The token endpoint
 (https://sheets.googleapis.com) are both HTTPS-only.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import ssl
