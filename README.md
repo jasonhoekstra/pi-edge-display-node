@@ -14,6 +14,7 @@ as text bulletins based on their configured start/end date-time window.
 | **Token management** | OAuth 2.0 token is saved across reboots; silently refreshed when possible; prompts for new authorisation only when required |
 | **Full-screen display** | Tkinter-based, black background with white text; shows all currently active bulletin messages |
 | **Auto-refresh** | Re-queries the spreadsheet every 60 seconds (configurable) |
+| **Auth URL on-screen** | When no browser can be launched (e.g. headless service), the OAuth authorization URL is displayed on the Pi's screen so you can visit it from a phone or laptop |
 | **FIPS Level 1 / SSL** | TLS 1.2+ enforced for all outbound connections; FIPS-approved cipher suites; certificate verification always on |
 
 ---
@@ -43,6 +44,11 @@ git clone https://github.com/jasonhoekstra/pi-edge-display-node.git
 cd pi-edge-display-node
 chmod +x setup.sh && ./setup.sh
 ```
+
+> **Run as your normal user** (e.g. `pi`), **not as root**.  Running as root
+> creates root-owned files (`.venv`, token cache) that the regular desktop
+> user cannot access, and some browsers (e.g. Chromium) refuse to launch as
+> root.  `setup.sh` will warn and prompt if it detects a root session.
 
 The script installs system packages, creates a Python virtual environment, and
 installs Python dependencies.
@@ -92,7 +98,10 @@ chmod +x start.sh && ./start.sh
 ```
 
 On the first run (or after a token expires and cannot be refreshed) a browser
-window opens for Google OAuth 2.0 authorisation.  After approval the token is
+window opens for Google OAuth 2.0 authorisation.  If no browser is installed
+(e.g. a minimal or headless Pi), the authorization URL is displayed
+full-screen on the Pi's display — scan or type it on another device (phone,
+laptop) to complete the flow.  After approval the token is
 saved to `~/.config/pi-edge-display-node/token.json` (permissions `0600`) and
 reused on subsequent starts without any user interaction.
 
