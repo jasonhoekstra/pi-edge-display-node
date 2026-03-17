@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import types
 from unittest.mock import MagicMock, patch, mock_open
 
@@ -231,6 +232,48 @@ class TestExplicitBrowser:
 
         assert result is False
 
+    def test_shows_url_window_when_no_browser_and_close_event_provided(self, monkeypatch):
+        monkeypatch.setattr(auth.shutil, "which", lambda cmd: None)
+
+        shown = []
+        monkeypatch.setattr(
+            auth, "_show_auth_url_window",
+            lambda url, event: shown.append((url, event)),
+        )
+
+        close_event = threading.Event()
+        auth._ExplicitBrowser(close_event=close_event).open("https://example.com/auth")
+
+        assert shown == [("https://example.com/auth", close_event)]
+
+    def test_does_not_show_url_window_when_no_close_event(self, monkeypatch):
+        monkeypatch.setattr(auth.shutil, "which", lambda cmd: None)
+
+        shown = []
+        monkeypatch.setattr(
+            auth, "_show_auth_url_window",
+            lambda url, event: shown.append((url, event)),
+        )
+
+        auth._ExplicitBrowser().open("https://example.com/auth")
+
+        assert shown == []
+
+    def test_does_not_show_url_window_when_browser_found(self, monkeypatch):
+        monkeypatch.setattr(auth.shutil, "which", lambda cmd: "/usr/bin/chromium-browser")
+        monkeypatch.setattr(auth.subprocess, "Popen", lambda args, **kw: MagicMock())
+
+        shown = []
+        monkeypatch.setattr(
+            auth, "_show_auth_url_window",
+            lambda url, event: shown.append((url, event)),
+        )
+
+        close_event = threading.Event()
+        auth._ExplicitBrowser(close_event=close_event).open("https://example.com/auth")
+
+        assert shown == []
+
 
 # ── _run_auth_flow ─────────────────────────────────────────────────────────────
 
@@ -267,6 +310,47 @@ class TestRunAuthFlow:
         _, kwargs = mock_flow.run_local_server.call_args
         assert "browser" in kwargs
         assert isinstance(kwargs["browser"], auth._ExplicitBrowser)
+
+    def test_close_event_is_set_after_successful_auth(self, tmp_path, monkeypatch):
+        creds_file = tmp_path / "credentials.json"
+        creds_file.write_text(json.dumps({"installed": {}}))
+        monkeypatch.setattr(auth, "CREDENTIALS_FILE", str(creds_file))
+
+        captured_events = []
+
+        def _fake_run_local_server(port, browser):
+            captured_events.append(browser._close_event)
+            return _valid_creds()
+
+        mock_flow = MagicMock()
+        mock_flow.run_local_server.side_effect = _fake_run_local_server
+        _FLOW_CLS.from_client_secrets_file.return_value = mock_flow
+
+        auth._run_auth_flow()
+
+        assert len(captured_events) == 1
+        assert captured_events[0].is_set()
+
+    def test_close_event_is_set_even_on_auth_failure(self, tmp_path, monkeypatch):
+        creds_file = tmp_path / "credentials.json"
+        creds_file.write_text(json.dumps({"installed": {}}))
+        monkeypatch.setattr(auth, "CREDENTIALS_FILE", str(creds_file))
+
+        captured_events = []
+
+        def _fake_run_local_server(port, browser):
+            captured_events.append(browser._close_event)
+            raise RuntimeError("auth failed")
+
+        mock_flow = MagicMock()
+        mock_flow.run_local_server.side_effect = _fake_run_local_server
+        _FLOW_CLS.from_client_secrets_file.return_value = mock_flow
+
+        with pytest.raises(RuntimeError, match="auth failed"):
+            auth._run_auth_flow()
+
+        assert len(captured_events) == 1
+        assert captured_events[0].is_set()
 
 
 # ── get_credentials (integration-style) ───────────────────────────────────────

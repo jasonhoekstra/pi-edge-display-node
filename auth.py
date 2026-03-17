@@ -123,7 +123,7 @@ def get_credentials() -> Credentials:
             return creds
 
     # Full interactive auth flow required.
-    logger.info("Running OAuth 2.0 authorisation flow.")
+    logger.info("Running OAuth 2.0 authorization flow.")
     creds = _run_auth_flow()
     _save_token(creds)
     return creds
@@ -169,7 +169,16 @@ class _ExplicitBrowser(webbrowser.BaseBrowser):
     skipping ``xdg-open``.
 
     If no graphical browser can be found the authorization URL is logged at
-    WARNING level so the user can complete the flow manually.
+    WARNING level and, when *close_event* is provided, it is also displayed
+    on the Pi's screen via :func:`_show_auth_url_window` so the user can
+    visit it from another device (e.g. a phone or laptop on the same network).
+
+    Parameters
+    ----------
+    close_event:
+        A :class:`threading.Event` that will be set once the OAuth flow
+        completes.  When provided and no graphical browser is available,
+        :func:`_show_auth_url_window` is called to show the URL on screen.
     """
 
     _CANDIDATES = (
@@ -178,6 +187,10 @@ class _ExplicitBrowser(webbrowser.BaseBrowser):
         "firefox",
         "epiphany-browser",
     )
+
+    def __init__(self, close_event: threading.Event | None = None) -> None:
+        super().__init__()
+        self._close_event = close_event
 
     def open(self, url: str, new: int = 0, autoraise: bool = True) -> bool:
         for cmd in self._CANDIDATES:
@@ -198,7 +211,95 @@ class _ExplicitBrowser(webbrowser.BaseBrowser):
             "Please visit this URL to authorize the application: %s",
             url,
         )
+        if self._close_event is not None:
+            _show_auth_url_window(url, self._close_event)
         return False
+
+
+def _show_auth_url_window(url: str, close_event: threading.Event) -> None:
+    """
+    Display the OAuth 2.0 authorization URL in a full-screen Tkinter window.
+
+    Spawns a daemon thread so the call is non-blocking.  The window polls
+    *close_event* every 250 ms and destroys itself once the event is set
+    (i.e. once the OAuth flow completes or fails).
+
+    This is particularly useful on a Raspberry Pi running as a systemd service
+    where no browser is available: the URL is shown on the display so the user
+    can scan or type it on another device.  Press ``Esc`` or ``Ctrl+Q`` to
+    close the window manually.
+
+    Errors in the display thread are caught and logged at DEBUG level so they
+    never interrupt the authentication flow.
+    """
+
+    def _run() -> None:  # pragma: no cover – runs in a daemon thread
+        try:
+            import tkinter as tk  # local import – only needed for this window
+
+            root = tk.Tk()
+            root.title("Pi Edge Display – Authorization Required")
+            root.configure(bg="#000000")
+            root.attributes("-fullscreen", True)
+            root.bind("<Escape>", lambda _e: root.destroy())
+            root.bind("<Control-q>", lambda _e: root.destroy())
+            root.bind("<Control-Q>", lambda _e: root.destroy())
+
+            tk.Label(
+                root,
+                text="Authorization Required",
+                font=("Helvetica", 48, "bold"),
+                bg="#000000",
+                fg="#FFFFFF",
+            ).pack(pady=(80, 20))
+
+            tk.Label(
+                root,
+                text="Open the following URL in a browser to authorize:",
+                font=("Helvetica", 24),
+                bg="#000000",
+                fg="#AAAAAA",
+            ).pack()
+
+            frame = tk.Frame(root, bg="#111111")
+            frame.pack(fill=tk.X, padx=60, pady=20)
+
+            url_text = tk.Text(
+                frame,
+                font=("Courier", 16),
+                bg="#111111",
+                fg="#00DD88",
+                height=4,
+                wrap=tk.WORD,
+                state=tk.NORMAL,
+                relief=tk.FLAT,
+                highlightthickness=0,
+            )
+            url_text.insert(tk.END, url)
+            url_text.config(state=tk.DISABLED)
+            url_text.pack(padx=20, pady=20)
+
+            tk.Label(
+                root,
+                text="This window closes automatically once authorization is complete.",
+                font=("Helvetica", 18),
+                bg="#000000",
+                fg="#555555",
+            ).pack(pady=20)
+
+            def _poll_for_close() -> None:
+                if close_event.is_set():
+                    root.destroy()
+                else:
+                    root.after(250, _poll_for_close)
+
+            root.after(250, _poll_for_close)
+            root.mainloop()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Auth URL display window error: %s", exc)
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
 
 
 def _run_auth_flow() -> Credentials:
@@ -212,6 +313,11 @@ def _run_auth_flow() -> Credentials:
     A :class:`_ExplicitBrowser` is used instead of the system default so that
     the authorization URL is opened in a graphical browser directly, avoiding
     the ``xdg-open: permission denied`` error that can occur on Raspberry Pi OS.
+
+    When no graphical browser is available (e.g. when running as a systemd
+    service), the authorization URL is displayed on the Pi's screen via
+    :func:`_show_auth_url_window` so the user can visit it from another device.
+    The window closes automatically once the OAuth flow completes.
 
     Raises
     ------
@@ -229,7 +335,12 @@ def _run_auth_flow() -> Credentials:
         CREDENTIALS_FILE,
         SCOPES,
     )
-    creds = flow.run_local_server(port=0, browser=_ExplicitBrowser())
+    close_event = threading.Event()
+    browser = _ExplicitBrowser(close_event=close_event)
+    try:
+        creds = flow.run_local_server(port=0, browser=browser)
+    finally:
+        close_event.set()
     logger.info("OAuth 2.0 flow completed successfully.")
     return creds
 
