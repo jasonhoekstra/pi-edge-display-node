@@ -17,6 +17,8 @@ Controls (for operator use)
 • Ctrl+Q     – quit the application.
 """
 
+from __future__ import annotations
+
 import logging
 import tkinter as tk
 from datetime import datetime
