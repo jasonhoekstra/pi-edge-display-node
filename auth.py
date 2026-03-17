@@ -27,7 +27,10 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import ssl
+import subprocess
+import webbrowser
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -153,6 +156,50 @@ def _refresh_token(creds: Credentials) -> Credentials | None:
         return None
 
 
+class _ExplicitBrowser(webbrowser.BaseBrowser):
+    """
+    Browser controller that bypasses ``xdg-open`` and launches a graphical
+    browser directly.
+
+    On Raspberry Pi OS, ``xdg-open`` can fail with a permission-denied error
+    because it is a shell script that may not be executable in all service
+    environments.  This controller instead tries well-known browser executables
+    in order and invokes the first one found via :mod:`subprocess`, completely
+    skipping ``xdg-open``.
+
+    If no graphical browser can be found the authorization URL is logged at
+    WARNING level so the user can complete the flow manually.
+    """
+
+    _CANDIDATES = (
+        "chromium-browser",
+        "chromium",
+        "firefox",
+        "epiphany-browser",
+    )
+
+    def open(self, url: str, new: int = 0, autoraise: bool = True) -> bool:
+        for cmd in self._CANDIDATES:
+            if shutil.which(cmd):
+                try:
+                    subprocess.Popen(
+                        [cmd, url],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True,
+                    )
+                    logger.info("Opened authorization URL in %s.", cmd)
+                    return True
+                except OSError as exc:
+                    logger.debug("Could not launch %s: %s", cmd, exc)
+        logger.warning(
+            "No graphical browser could be opened automatically. "
+            "Please visit this URL to authorize the application: %s",
+            url,
+        )
+        return False
+
+
 def _run_auth_flow() -> Credentials:
     """
     Launch the OAuth 2.0 local-server flow.
@@ -160,6 +207,10 @@ def _run_auth_flow() -> Credentials:
     The initial browser-based authorization uses the system's default TLS
     configuration.  Subsequent token refreshes use the FIPS-compliant secure
     session via :func:`_refresh_token`.
+
+    A :class:`_ExplicitBrowser` is used instead of the system default so that
+    the authorization URL is opened in a graphical browser directly, avoiding
+    the ``xdg-open: permission denied`` error that can occur on Raspberry Pi OS.
 
     Raises
     ------
@@ -177,7 +228,7 @@ def _run_auth_flow() -> Credentials:
         CREDENTIALS_FILE,
         SCOPES,
     )
-    creds = flow.run_local_server(port=0)
+    creds = flow.run_local_server(port=0, browser=_ExplicitBrowser())
     logger.info("OAuth 2.0 flow completed successfully.")
     return creds
 

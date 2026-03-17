@@ -167,6 +167,71 @@ class TestRefreshToken:
         creds.refresh.side_effect = None  # reset
 
 
+# ── _ExplicitBrowser ──────────────────────────────────────────────────────────
+
+class TestExplicitBrowser:
+    def test_opens_first_available_browser(self, monkeypatch):
+        monkeypatch.setattr(
+            auth.shutil, "which",
+            lambda cmd: "/usr/bin/chromium-browser" if cmd == "chromium-browser" else None,
+        )
+        launched = []
+
+        def mock_popen(args, **kw):
+            launched.append(args)
+            return MagicMock()
+
+        monkeypatch.setattr(auth.subprocess, "Popen", mock_popen)
+
+        result = auth._ExplicitBrowser().open("https://example.com/auth")
+
+        assert result is True
+        assert launched == [["chromium-browser", "https://example.com/auth"]]
+
+    def test_skips_to_next_candidate_when_first_missing(self, monkeypatch):
+        monkeypatch.setattr(
+            auth.shutil, "which",
+            lambda cmd: "/usr/bin/chromium" if cmd == "chromium" else None,
+        )
+        launched = []
+
+        def mock_popen(args, **kw):
+            launched.append(args)
+            return MagicMock()
+
+        monkeypatch.setattr(auth.subprocess, "Popen", mock_popen)
+
+        result = auth._ExplicitBrowser().open("https://example.com/auth")
+
+        assert result is True
+        assert launched == [["chromium", "https://example.com/auth"]]
+
+    def test_skips_to_next_candidate_on_oserror(self, monkeypatch):
+        monkeypatch.setattr(auth.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+
+        launched = []
+
+        def mock_popen(args, **kw):
+            if args[0] == "chromium-browser":
+                raise OSError("permission denied")
+            launched.append(args)
+            return MagicMock()
+
+        monkeypatch.setattr(auth.subprocess, "Popen", mock_popen)
+
+        result = auth._ExplicitBrowser().open("https://example.com/auth")
+
+        assert result is True
+        assert launched == [["chromium", "https://example.com/auth"]]
+
+    def test_returns_false_when_no_browser_found(self, monkeypatch):
+        monkeypatch.setattr(auth.shutil, "which", lambda cmd: None)
+
+        result = auth._ExplicitBrowser().open("https://example.com/auth")
+
+        assert result is False
+
+
 # ── _run_auth_flow ─────────────────────────────────────────────────────────────
 
 class TestRunAuthFlow:
@@ -187,6 +252,21 @@ class TestRunAuthFlow:
 
         result = auth._run_auth_flow()
         assert result is mock_creds
+
+    def test_passes_explicit_browser_to_run_local_server(self, tmp_path, monkeypatch):
+        creds_file = tmp_path / "credentials.json"
+        creds_file.write_text(json.dumps({"installed": {}}))
+        monkeypatch.setattr(auth, "CREDENTIALS_FILE", str(creds_file))
+
+        mock_flow = MagicMock()
+        mock_flow.run_local_server.return_value = _valid_creds()
+        _FLOW_CLS.from_client_secrets_file.return_value = mock_flow
+
+        auth._run_auth_flow()
+
+        _, kwargs = mock_flow.run_local_server.call_args
+        assert "browser" in kwargs
+        assert isinstance(kwargs["browser"], auth._ExplicitBrowser)
 
 
 # ── get_credentials (integration-style) ───────────────────────────────────────
