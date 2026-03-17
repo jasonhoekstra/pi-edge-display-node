@@ -144,7 +144,7 @@ class BulletinDisplay:
             justify="center",
             anchor="center",
             cursor="none",
-            wraplength=1,  # Updated dynamically on frame resize.
+            wraplength=800,  # Updated dynamically on frame resize.
         )
         self._text_widget.pack(expand=True)
 
