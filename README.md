@@ -33,6 +33,23 @@ Accepted date/time formats (Google Sheets exports): `YYYY-MM-DD HH:MM:SS`,
 `YYYY-MM-DDTHH:MM:SS`, `MM/DD/YYYY HH:MM:SS`, `MM/DD/YYYY HH:MM`,
 `YYYY-MM-DD HH:MM`, `YYYY-MM-DD`, `MM/DD/YYYY`.
 
+### Optional: Configuration sheet
+
+Add a second tab named **Configuration** (or the name set via
+`CONFIGURATION_SHEET_NAME`) to your spreadsheet to control display behaviour
+remotely.  The sheet uses a simple **key / value** layout (column A / column B,
+no header required):
+
+| Column A | Column B |
+|---|---|
+| AGENCY_NAME | City Hall Lobby |
+| REFRESH_SECONDS | 120 |
+
+| Key | Effect |
+|---|---|
+| `AGENCY_NAME` | Overrides the title shown at the top of the display (default: *Bulletin Board*) |
+| `REFRESH_SECONDS` | How often (in seconds) the display re-fetches the spreadsheet (default: *60*) |
+
 ---
 
 ## First-time setup (Raspberry Pi)
@@ -42,8 +59,12 @@ Accepted date/time formats (Google Sheets exports): `YYYY-MM-DD HH:MM:SS`,
 ```bash
 git clone https://github.com/jasonhoekstra/pi-edge-display-node.git
 cd pi-edge-display-node
-chmod +x setup.sh && sudo ./setup.sh
+chmod +x setup.sh && ./setup.sh
 ```
+
+> **Do not use `sudo`.**  The script calls `sudo` internally for the `apt-get`
+> commands that need it.  Running the entire script as root will create
+> root-owned files (`.venv`, token, etc.) that your normal user cannot access.
 
 The script installs system packages, creates a Python virtual environment, and
 installs Python dependencies.
@@ -69,21 +90,40 @@ The Spreadsheet ID is the long alphanumeric string in your Google Sheets URL:
 https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit
 ```
 
-Set it as an environment variable (add to `~/.bashrc` or `~/.profile`):
+The easiest approach is to copy the sample environment file and edit it:
+
+```bash
+cp .env.sample .env
+nano .env          # replace the sample ID with your own
+```
+
+The `.env` file is loaded automatically by `start.sh`.
+
+Alternatively, export the variable in your shell profile (`~/.bashrc` or
+`~/.profile`):
 
 ```bash
 export SPREADSHEET_ID="your-spreadsheet-id-here"
-# Optional: override the tab name (default: Sheet1)
-export SHEET_NAME="MyTab"
 ```
 
-Or edit `config.py` directly.
-
-### 4 – First run / re-authorisation
+Optional overrides (can also be set in `.env`):
 
 ```bash
-chmod +x start.sh && sudo ./start.sh
+SHEET_NAME="MyTab"                  # tab containing messages (default: Messages)
+TITLE_TEXT="My Custom Title"        # display title (default: Bulletin Board)
+CONFIGURATION_SHEET_NAME="Config"   # tab with key-value settings (default: Configuration)
+CREDENTIALS_FILE="/other/path.json" # path to OAuth client secrets (default: ./credentials.json)
 ```
+
+### 4 – First run / authorisation
+
+```bash
+chmod +x start.sh && ./start.sh
+```
+
+> **Do not use `sudo`.**  The display runs under your normal user's graphical
+> session.  Running as root will prevent Tkinter from connecting to the X
+> display.
 
 `start.sh` loads `.env` (if present), checks prerequisites, and then launches
 `main.py` via the virtual-environment Python.  You can also invoke it directly:
@@ -104,7 +144,9 @@ reused on subsequent starts without any user interaction.
 ## Running on startup
 
 The setup script offers to install a **systemd user service** that starts the
-display automatically after the graphical session starts.
+display automatically after the graphical session starts.  The service reads
+environment variables (including `SPREADSHEET_ID`) from the `.env` file, so
+make sure it exists and is populated before starting the service.
 
 Manual control:
 
@@ -117,6 +159,13 @@ systemctl --user status pi-edge-display.service
 # View logs
 journalctl --user -u pi-edge-display.service -f
 ```
+
+> **Note:** If you want the service to start at boot (before you log in),
+> enable user lingering:
+>
+> ```bash
+> sudo loginctl enable-linger "$USER"
+> ```
 
 ---
 
@@ -133,8 +182,8 @@ journalctl --user -u pi-edge-display.service -f
 ## Running the tests
 
 ```bash
-pip install pytest
-pytest tests/ -v
+.venv/bin/pip install pytest
+.venv/bin/python -m pytest tests/ -v
 ```
 
 Tests that require a graphical display (Tkinter tests) are automatically
@@ -171,7 +220,9 @@ pi-edge-display-node/
 ├── requirements.txt   # Python dependencies
 ├── setup.sh           # Raspberry Pi setup script (run once)
 ├── start.sh           # Startup script (run to launch the app)
+├── .env.sample        # Example .env file (copy to .env and edit)
 ├── tests/
+│   ├── __init__.py    # Test package marker
 │   ├── test_auth.py   # Auth unit tests
 │   ├── test_sheets.py # Sheets unit tests
 │   └── test_display.py# Display unit tests (requires DISPLAY)
