@@ -95,10 +95,11 @@ echo ""
 echo "  Set SPREADSHEET_ID to the ID from your Google Sheets URL:"
 echo "    https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit"
 echo ""
-echo "  Add this to your shell profile (~/.bashrc or ~/.profile):"
-echo "    export SPREADSHEET_ID=\"your-spreadsheet-id-here\""
+echo "  The easiest way is to copy the sample .env file and edit it:"
+echo "    cp .env.sample .env"
+echo "    nano .env"
 echo ""
-echo "  Or edit config.py and set SPREADSHEET_ID directly."
+echo "  start.sh and the systemd service both load .env automatically."
 echo "────────────────────────────────────────────────────────────"
 echo ""
 
@@ -116,7 +117,7 @@ Wants=graphical-session.target
 Type=simple
 Environment="DISPLAY=:0"
 Environment="XAUTHORITY=%h/.Xauthority"
-Environment="SPREADSHEET_ID=${SPREADSHEET_ID:-}"
+EnvironmentFile=-${SCRIPT_DIR}/.env
 ExecStart=${VENV_DIR}/bin/python ${SCRIPT_DIR}/main.py
 Restart=on-failure
 RestartSec=10

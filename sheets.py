@@ -63,7 +63,7 @@ def fetch_all_messages(service, spreadsheet_id: str, sheet_name: str = SHEET_NAM
     spreadsheet_id:
         The ID portion of the spreadsheet URL.
     sheet_name:
-        Name of the tab to read (default: ``"Sheet1"``).
+        Name of the tab to read (default: ``"Messages"``).
 
     Returns
     -------
