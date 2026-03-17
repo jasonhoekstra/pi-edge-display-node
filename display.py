@@ -5,7 +5,8 @@ Layout
 ──────
 • Black background, white text – high contrast for a dedicated display panel.
 • Header bar showing the application title and last-refresh timestamp.
-• Central area showing one active message at a time as a rotating slide.
+• Central area showing one active message at a time as a rotating slide,
+  centred both horizontally and vertically.
 • "No active messages" placeholder when the sheet has nothing to show.
 • Messages are refreshed on a timer (default 60 s) by calling back into the
   data layer – no local data is persisted between refreshes.
@@ -131,29 +132,28 @@ class BulletinDisplay:
         separator = tk.Frame(self._root, bg=TEXT_COLOR, height=2)
         separator.pack(fill=tk.X, padx=20, pady=10)
 
-        # ── Message area (scrollable) ──────────────────────────────────────────
-        msg_frame = tk.Frame(self._root, bg=BACKGROUND_COLOR)
-        msg_frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=10)
+        # ── Message area (centered) ───────────────────────────────────────────
+        self._msg_frame = tk.Frame(self._root, bg=BACKGROUND_COLOR)
+        self._msg_frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=10)
 
-        scrollbar = tk.Scrollbar(msg_frame, orient=tk.VERTICAL)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        self._text_widget = tk.Text(
-            msg_frame,
+        self._text_widget = tk.Label(
+            self._msg_frame,
             font=(FONT_FAMILY, FONT_SIZE),
             bg=BACKGROUND_COLOR,
             fg=TEXT_COLOR,
-            wrap=tk.WORD,
-            state=tk.DISABLED,
+            justify="center",
+            anchor="center",
             cursor="none",
-            relief=tk.FLAT,
-            highlightthickness=0,
-            yscrollcommand=scrollbar.set,
-            spacing1=10,   # Space above each paragraph/line.
-            spacing3=10,   # Space below each paragraph/line.
+            wraplength=1,  # Updated dynamically on frame resize.
         )
-        self._text_widget.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
-        scrollbar.config(command=self._text_widget.yview)
+        self._text_widget.pack(expand=True)
+
+        self._msg_frame.bind("<Configure>", self._on_msg_frame_configure)
+
+    def _on_msg_frame_configure(self, event) -> None:
+        """Keep the label wrap-length in sync with the frame width."""
+        new_width = max(1, event.width - 40)
+        self._text_widget.config(wraplength=new_width)
 
     # ── Refresh logic ─────────────────────────────────────────────────────────
 
@@ -191,35 +191,22 @@ class BulletinDisplay:
             self._render_messages([])
 
     def _render_messages(self, messages: list[str]) -> None:
-        """Update the text widget with the first element of *messages* as a slide."""
+        """Update the label with the first element of *messages* as a slide."""
         self._timestamp_var.set(f"Updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
-        self._text_widget.config(state=tk.NORMAL)
-        self._text_widget.delete("1.0", tk.END)
-
         if messages:
-            self._text_widget.insert(tk.END, messages[0])
+            self._text_widget.config(text=messages[0], fg=TEXT_COLOR)
         else:
-            self._text_widget.insert(
-                tk.END, "No active messages at this time.", "placeholder"
-            )
-            self._text_widget.tag_config(
-                "placeholder",
-                foreground="#888888",
-                justify="center",
+            self._text_widget.config(
+                text="No active messages at this time.", fg="#888888"
             )
 
-        self._text_widget.config(state=tk.DISABLED)
         logger.debug("Display updated with %d message(s).", len(messages))
 
     def _render_error(self, message: str) -> None:
-        """Display an error notice in the text widget."""
+        """Display an error notice in the label."""
         self._timestamp_var.set(f"Error at {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        self._text_widget.config(state=tk.NORMAL)
-        self._text_widget.delete("1.0", tk.END)
-        self._text_widget.insert(tk.END, f"\u26a0  {message}", "error")
-        self._text_widget.tag_config("error", foreground="#FF4444")
-        self._text_widget.config(state=tk.DISABLED)
+        self._text_widget.config(text=f"\u26a0  {message}", fg="#FF4444")
 
     # ── Key bindings ──────────────────────────────────────────────────────────
 

@@ -37,6 +37,7 @@ def tk_root():
 
 class TestBulletinDisplay:
     def _make_display(self, tk_root, messages):
+        from config import REFRESH_INTERVAL_MS, SLIDE_INTERVAL_MS
         from display import BulletinDisplay
 
         # Cancel any after() callbacks that the constructor schedules.
@@ -45,6 +46,9 @@ class TestBulletinDisplay:
         display._get_messages = lambda: messages
         display._messages = list(messages)
         display._current_slide = 0
+        display._title_text = "Test"
+        display._refresh_interval_ms = REFRESH_INTERVAL_MS
+        display._slide_interval_ms = SLIDE_INTERVAL_MS
         display._setup_window()
         display._build_widgets()
         return display
@@ -53,20 +57,20 @@ class TestBulletinDisplay:
         display = self._make_display(tk_root, ["Hello World", "Second message"])
         # Only the first slide (index 0) should be visible.
         display._render_messages(["Hello World"])
-        content = display._text_widget.get("1.0", "end").strip()
+        content = display._text_widget.cget("text")
         assert "Hello World" in content
         assert "Second message" not in content
 
     def test_renders_no_messages_placeholder(self, tk_root):
         display = self._make_display(tk_root, [])
         display._render_messages([])
-        content = display._text_widget.get("1.0", "end").strip()
+        content = display._text_widget.cget("text")
         assert "No active messages" in content
 
     def test_renders_error_message(self, tk_root):
         display = self._make_display(tk_root, [])
         display._render_error("Connection refused")
-        content = display._text_widget.get("1.0", "end").strip()
+        content = display._text_widget.cget("text")
         assert "Connection refused" in content
 
     def test_timestamp_updated_on_render(self, tk_root):
@@ -84,7 +88,7 @@ class TestBulletinDisplay:
     def test_slide_shows_single_message_not_bullet_list(self, tk_root):
         display = self._make_display(tk_root, ["Slide One", "Slide Two"])
         display._render_messages(["Slide One"])
-        content = display._text_widget.get("1.0", "end")
+        content = display._text_widget.cget("text")
         assert "Slide One" in content
         # Slide mode does not use bullet characters.
         assert "\u2022" not in content
@@ -119,14 +123,14 @@ class TestBulletinDisplay:
         display._get_messages = lambda: (_ for _ in ()).throw(RuntimeError("fail"))
         # Should not raise; should render an error instead.
         display._refresh()
-        content = display._text_widget.get("1.0", "end").strip()
+        content = display._text_widget.cget("text")
         assert content  # some error text was rendered
 
     def test_render_current_slide_shows_first_message(self, tk_root):
         display = self._make_display(tk_root, ["First", "Second", "Third"])
         display._current_slide = 0
         display._render_current_slide()
-        content = display._text_widget.get("1.0", "end").strip()
+        content = display._text_widget.cget("text")
         assert "First" in content
         assert "Second" not in content
 
@@ -134,7 +138,7 @@ class TestBulletinDisplay:
         display = self._make_display(tk_root, ["First", "Second", "Third"])
         display._current_slide = 1
         display._render_current_slide()
-        content = display._text_widget.get("1.0", "end").strip()
+        content = display._text_widget.cget("text")
         assert "Second" in content
         assert "First" not in content
 
@@ -172,7 +176,7 @@ class TestBulletinDisplay:
         assert display._current_slide == 0  # should not advance
 
         # The displayed content should still be the single message.
-        content = display._text_widget.get("1.0", "end").strip()
+        content = display._text_widget.cget("text")
         assert "Only" in content
 
         tk_root.after = original_after
