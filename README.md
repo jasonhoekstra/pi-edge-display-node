@@ -81,6 +81,13 @@ Or edit `config.py` directly.
 ### 4 – First run / re-authorisation
 
 ```bash
+chmod +x start.sh && ./start.sh
+```
+
+`start.sh` loads `.env` (if present), checks prerequisites, and then launches
+`main.py` via the virtual-environment Python.  You can also invoke it directly:
+
+```bash
 .venv/bin/python main.py
 ```
 
@@ -159,7 +166,8 @@ pi-edge-display-node/
 ├── sheets.py          # Google Sheets API integration
 ├── display.py         # Tkinter full-screen bulletin display
 ├── requirements.txt   # Python dependencies
-├── setup.sh           # Raspberry Pi setup script
+├── setup.sh           # Raspberry Pi setup script (run once)
+├── start.sh           # Startup script (run to launch the app)
 ├── tests/
 │   ├── test_auth.py   # Auth unit tests
 │   ├── test_sheets.py # Sheets unit tests
