@@ -27,8 +27,6 @@ import logging
 import os
 import ssl
 
-import httplib2
-from google.auth.exceptions import TransportError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -102,8 +100,6 @@ def get_credentials() -> Credentials:
     ------
     FileNotFoundError
         If ``credentials.json`` is missing and a new flow is required.
-    google.auth.exceptions.TransportError
-        On network failures during token refresh.
     """
     os.makedirs(CONFIG_DIR, exist_ok=True)
 
@@ -150,7 +146,7 @@ def _refresh_token(creds: Credentials) -> Credentials | None:
         creds.refresh(request)
         logger.info("Token refreshed successfully.")
         return creds
-    except (TransportError, Exception) as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         logger.warning("Token refresh failed (%s) – will re-authenticate.", exc)
         return None
 
@@ -158,6 +154,10 @@ def _refresh_token(creds: Credentials) -> Credentials | None:
 def _run_auth_flow() -> Credentials:
     """
     Launch the OAuth 2.0 local-server flow.
+
+    The initial browser-based authorization uses the system's default TLS
+    configuration.  Subsequent token refreshes use the FIPS-compliant secure
+    session via :func:`_refresh_token`.
 
     Raises
     ------
@@ -174,7 +174,6 @@ def _run_auth_flow() -> Credentials:
     flow = InstalledAppFlow.from_client_secrets_file(
         CREDENTIALS_FILE,
         SCOPES,
-        # Use the secure session so the token-exchange POST is also TLS-1.2+.
     )
     creds = flow.run_local_server(port=0)
     logger.info("OAuth 2.0 flow completed successfully.")
