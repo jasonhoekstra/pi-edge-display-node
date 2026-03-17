@@ -46,11 +46,28 @@ class BulletinDisplay:
         A zero-argument callable that returns a ``list[str]`` of active
         message texts.  It may raise; exceptions are caught and displayed as
         an error notice.
+    title_text:
+        Optional display title (e.g. agency name).  Defaults to
+        ``config.TITLE_TEXT``.
+    refresh_interval_ms:
+        Optional refresh interval in milliseconds.  Defaults to
+        ``config.REFRESH_INTERVAL_MS``.
     """
 
-    def __init__(self, root: tk.Tk, get_messages_fn: Callable[[], list[str]]) -> None:
+    def __init__(
+        self,
+        root: tk.Tk,
+        get_messages_fn: Callable[[], list[str]],
+        *,
+        title_text: str | None = None,
+        refresh_interval_ms: int | None = None,
+    ) -> None:
         self._root = root
         self._get_messages = get_messages_fn
+        self._title_text = title_text if title_text is not None else TITLE_TEXT
+        self._refresh_interval_ms = (
+            refresh_interval_ms if refresh_interval_ms is not None else REFRESH_INTERVAL_MS
+        )
         self._setup_window()
         self._build_widgets()
         # Schedule the first refresh immediately once the event loop starts.
@@ -59,7 +76,7 @@ class BulletinDisplay:
     # ── Window setup ──────────────────────────────────────────────────────────
 
     def _setup_window(self) -> None:
-        self._root.title(TITLE_TEXT)
+        self._root.title(self._title_text)
         self._root.configure(bg=BACKGROUND_COLOR)
         self._root.attributes("-fullscreen", True)
         self._root.bind("<Escape>", self._exit_fullscreen)
@@ -76,7 +93,7 @@ class BulletinDisplay:
 
         tk.Label(
             header_frame,
-            text=TITLE_TEXT,
+            text=self._title_text,
             font=(FONT_FAMILY, FONT_SIZE // 2, "bold"),
             bg=BACKGROUND_COLOR,
             fg=TEXT_COLOR,
@@ -133,7 +150,7 @@ class BulletinDisplay:
             self._render_error(str(exc))
 
         # Schedule next refresh.
-        self._root.after(REFRESH_INTERVAL_MS, self._refresh)
+        self._root.after(self._refresh_interval_ms, self._refresh)
 
     def _render_messages(self, messages: list[str]) -> None:
         """Update the text widget with *messages*."""

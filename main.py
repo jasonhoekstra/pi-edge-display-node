@@ -34,9 +34,9 @@ def main() -> None:
     # Local imports kept here so that the logging config above is applied first.
     import tkinter as tk
 
-    from config import SHEET_NAME, SPREADSHEET_ID
+    from config import CONFIGURATION_SHEET_NAME, REFRESH_INTERVAL_MS, SHEET_NAME, SPREADSHEET_ID, TITLE_TEXT
     from auth import get_credentials
-    from sheets import build_service, get_active_messages
+    from sheets import build_service, fetch_configuration, get_active_messages
     from display import BulletinDisplay
 
     # ── Pre-flight checks ──────────────────────────────────────────────────────
@@ -63,6 +63,26 @@ def main() -> None:
     # ── Build Sheets service ───────────────────────────────────────────────────
     service = build_service(creds)
 
+    # ── Load remote configuration (AGENCY_NAME, REFRESH_SECONDS) ──────────────
+    remote_cfg = fetch_configuration(service, SPREADSHEET_ID, CONFIGURATION_SHEET_NAME)
+
+    title_text = remote_cfg.get("AGENCY_NAME") or TITLE_TEXT
+
+    refresh_seconds = remote_cfg.get("REFRESH_SECONDS")
+    if refresh_seconds is not None:
+        try:
+            refresh_interval_ms = int(float(refresh_seconds) * 1000)
+        except ValueError:
+            logger.warning(
+                "Invalid REFRESH_SECONDS value %r in Configuration sheet – using default.",
+                refresh_seconds,
+            )
+            refresh_interval_ms = REFRESH_INTERVAL_MS
+    else:
+        refresh_interval_ms = REFRESH_INTERVAL_MS
+
+    logger.info("Title: %s  Refresh: %d ms", title_text, refresh_interval_ms)
+
     # ── Message callback used by the display ───────────────────────────────────
     def fetch_messages() -> list[str]:
         """Callback invoked by BulletinDisplay on every refresh cycle."""
@@ -70,7 +90,7 @@ def main() -> None:
 
     # ── Start full-screen display ──────────────────────────────────────────────
     root = tk.Tk()
-    BulletinDisplay(root, fetch_messages)
+    BulletinDisplay(root, fetch_messages, title_text=title_text, refresh_interval_ms=refresh_interval_ms)
     logger.info("Entering display event loop.")
     root.mainloop()
     logger.info("Display closed – exiting.")
