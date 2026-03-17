@@ -55,6 +55,12 @@ if [ -z "${SPREADSHEET_ID:-}" ]; then
     exit 1
 fi
 
+# ── Ensure DISPLAY is set (required for Tkinter on the Pi) ────────────────────
+if [ -z "${DISPLAY:-}" ]; then
+    export DISPLAY=:0
+    info "DISPLAY not set – defaulting to :0"
+fi
+
 # ── Launch ─────────────────────────────────────────────────────────────────────
 info "Starting Pi Edge Display Node..."
 cd "${SCRIPT_DIR}"

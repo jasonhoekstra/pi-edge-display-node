@@ -22,6 +22,7 @@ from config import (
     COL_END_DT,
     COL_MESSAGE,
     COL_START_DT,
+    CONFIGURATION_SHEET_NAME,
     DATETIME_FORMATS,
     SHEET_NAME,
 )
@@ -178,3 +179,62 @@ def get_active_messages(
 
     logger.info("%d active message(s) at %s.", len(active), now.strftime("%Y-%m-%d %H:%M"))
     return active
+
+
+# ── Configuration fetching ─────────────────────────────────────────────────────
+
+def fetch_configuration(
+    service,
+    spreadsheet_id: str,
+    config_sheet_name: str = CONFIGURATION_SHEET_NAME,
+) -> dict[str, str]:
+    """
+    Fetch key-value configuration from the Configuration sheet.
+
+    The sheet is expected to have setting names in column A and their
+    corresponding values in column B, with no header row required.
+
+    Recognised keys: ``AGENCY_NAME``, ``REFRESH_SECONDS``.
+
+    Parameters
+    ----------
+    service:
+        Google Sheets API service object.
+    spreadsheet_id:
+        Spreadsheet ID.
+    config_sheet_name:
+        Name of the configuration sheet tab (default: ``"Configuration"``).
+
+    Returns
+    -------
+    dict[str, str]
+        Mapping of setting name to value; empty dict on error or empty sheet.
+    """
+    try:
+        result = (
+            service.spreadsheets()
+            .values()
+            .get(
+                spreadsheetId=spreadsheet_id,
+                range=f"'{config_sheet_name}'!A:B",
+            )
+            .execute()
+        )
+    except HttpError as exc:
+        logger.error("Sheets API error while fetching configuration: %s", exc)
+        return {}
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Unexpected error fetching configuration: %s", exc)
+        return {}
+
+    rows: list[list[Any]] = result.get("values", [])
+    config: dict[str, str] = {}
+    for row in rows:
+        if len(row) >= 2:
+            key = str(row[0]).strip()
+            value = str(row[1]).strip()
+            if key:
+                config[key] = value
+
+    logger.debug("Fetched %d configuration key(s) from '%s'.", len(config), config_sheet_name)
+    return config

@@ -27,7 +27,8 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 # Set SPREADSHEET_ID to the ID found in your Google Sheets URL, e.g.:
 #   https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "")
-SHEET_NAME = os.environ.get("SHEET_NAME", "Sheet1")
+SHEET_NAME = os.environ.get("SHEET_NAME", "Messages")
+CONFIGURATION_SHEET_NAME = os.environ.get("CONFIGURATION_SHEET_NAME", "Configuration")
 
 # Expected column order in the spreadsheet (0-based).
 # Row 1 must be a header row; data begins on row 2.
@@ -47,12 +48,12 @@ DATETIME_FORMATS = [
 ]
 
 # ── Display settings ──────────────────────────────────────────────────────────
-REFRESH_INTERVAL_MS = 60_000   # Refresh messages every 60 s
+REFRESH_INTERVAL_MS = 60_000   # Refresh messages every 60 s (overridable via Configuration sheet)
 FONT_FAMILY = "Helvetica"
 FONT_SIZE = 36
 BACKGROUND_COLOR = "#000000"
 TEXT_COLOR = "#FFFFFF"
-TITLE_TEXT = "Bulletin Board"
+TITLE_TEXT = os.environ.get("TITLE_TEXT", "Bulletin Board")
 
 # ── Security / SSL settings ───────────────────────────────────────────────────
 # Always verify TLS certificates; never set to False in production.

@@ -36,6 +36,7 @@ sys.modules["googleapiclient.errors"] = _gac_errors
 
 from sheets import (  # noqa: E402
     fetch_all_messages,
+    fetch_configuration,
     get_active_messages,
     parse_datetime,
 )
@@ -236,3 +237,73 @@ class TestGetActiveMessages:
         service = _make_service([])
         result = get_active_messages(service, "id")
         assert result == []
+
+
+# ── fetch_configuration ────────────────────────────────────────────────────────
+
+def _make_config_service(values):
+    """Build a mock Sheets service returning *values* for the configuration range."""
+    mock_service = MagicMock()
+    (
+        mock_service.spreadsheets()
+        .values()
+        .get()
+        .execute
+        .return_value
+    ) = {"values": values}
+    return mock_service
+
+
+class TestFetchConfiguration:
+    def test_returns_key_value_pairs(self):
+        service = _make_config_service([
+            ["AGENCY_NAME", "Acme Agency"],
+            ["REFRESH_SECONDS", "30"],
+        ])
+        config = fetch_configuration(service, "sheet-id", "Configuration")
+        assert config["AGENCY_NAME"] == "Acme Agency"
+        assert config["REFRESH_SECONDS"] == "30"
+
+    def test_empty_sheet_returns_empty_dict(self):
+        service = _make_config_service([])
+        config = fetch_configuration(service, "sheet-id", "Configuration")
+        assert config == {}
+
+    def test_skips_rows_with_fewer_than_two_columns(self):
+        service = _make_config_service([
+            ["AGENCY_NAME", "Acme Agency"],
+            ["ONLY_KEY"],
+        ])
+        config = fetch_configuration(service, "sheet-id", "Configuration")
+        assert "ONLY_KEY" not in config
+        assert config["AGENCY_NAME"] == "Acme Agency"
+
+    def test_strips_whitespace_from_keys_and_values(self):
+        service = _make_config_service([
+            ["  AGENCY_NAME  ", "  Acme Agency  "],
+        ])
+        config = fetch_configuration(service, "sheet-id", "Configuration")
+        assert config["AGENCY_NAME"] == "Acme Agency"
+
+    def test_skips_rows_with_empty_key(self):
+        service = _make_config_service([
+            ["", "some value"],
+            ["AGENCY_NAME", "Acme"],
+        ])
+        config = fetch_configuration(service, "sheet-id", "Configuration")
+        assert "" not in config
+        assert config["AGENCY_NAME"] == "Acme"
+
+    def test_http_error_returns_empty_dict(self):
+        from googleapiclient.errors import HttpError
+
+        mock_service = MagicMock()
+        (
+            mock_service.spreadsheets()
+            .values()
+            .get()
+            .execute
+            .side_effect
+        ) = HttpError(MagicMock(status=403), b"Forbidden")
+        config = fetch_configuration(mock_service, "sheet-id", "Configuration")
+        assert config == {}
