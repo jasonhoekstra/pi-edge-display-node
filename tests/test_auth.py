@@ -18,14 +18,12 @@ def _make_google_stubs():
     pkgs = [
         "google",
         "google.auth",
-        "google.auth.exceptions",
         "google.auth.transport",
         "google.auth.transport.requests",
         "google.oauth2",
         "google.oauth2.credentials",
         "google_auth_oauthlib",
         "google_auth_oauthlib.flow",
-        "httplib2",
         "requests",
         "requests.adapters",
         "urllib3",
@@ -34,9 +32,6 @@ def _make_google_stubs():
     ]
     for pkg in pkgs:
         sys.modules.setdefault(pkg, types.ModuleType(pkg))
-
-    # google.auth.exceptions.TransportError
-    sys.modules["google.auth.exceptions"].TransportError = Exception
 
     # google.auth.transport.requests.Request
     sys.modules["google.auth.transport.requests"].Request = MagicMock
