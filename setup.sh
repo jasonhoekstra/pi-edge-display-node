@@ -54,7 +54,14 @@ fi
 # ── 3. Python dependencies ─────────────────────────────────────────────────────
 info "Installing Python dependencies…"
 "${VENV_DIR}/bin/pip" install --upgrade pip --quiet
-"${VENV_DIR}/bin/pip" install -r "${SCRIPT_DIR}/requirements.txt" --quiet --prefer-binary
+# --only-binary=cryptography forces pip to use a pre-built wheel for the cryptography
+# package instead of compiling from source.  Building from source requires Rust/Cargo,
+# and the Cargo version shipped with Raspberry Pi OS is too old to parse the
+# Cargo.toml used by cryptography 41+, producing:
+#   "invalid type: map, expected a sequence for a key package.authors"
+"${VENV_DIR}/bin/pip" install -r "${SCRIPT_DIR}/requirements.txt" --quiet \
+    --prefer-binary \
+    --only-binary=cryptography
 ok "Python dependencies installed."
 
 # ── 4. Credentials reminder ────────────────────────────────────────────────────
