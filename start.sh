@@ -21,16 +21,6 @@ ENV_FILE="${SCRIPT_DIR}/.env"
 # ── Colour helpers ─────────────────────────────────────────────────────────────
 info()  { echo -e "\033[1;34m[INFO]\033[0m  $*"; }
 error() { echo -e "\033[1;31m[ERR ]\033[0m  $*" >&2; }
-warn()  { echo -e "\033[1;33m[WARN]\033[0m  $*"; }
-
-# ── Root check ─────────────────────────────────────────────────────────────────
-if [ "$(id -u)" -eq 0 ]; then
-    warn "Running as root is not recommended."
-    warn "The application creates user-specific config files under ~/.config/"
-    warn "and some browsers (e.g. Chromium) refuse to launch as root."
-    warn "Consider running as your normal user instead."
-    echo ""
-fi
 
 # ── Load .env (if present) ─────────────────────────────────────────────────────
 if [ -f "${ENV_FILE}" ]; then

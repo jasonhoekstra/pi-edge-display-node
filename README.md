@@ -42,13 +42,8 @@ Accepted date/time formats (Google Sheets exports): `YYYY-MM-DD HH:MM:SS`,
 ```bash
 git clone https://github.com/jasonhoekstra/pi-edge-display-node.git
 cd pi-edge-display-node
-chmod +x setup.sh && ./setup.sh
+chmod +x setup.sh && sudo ./setup.sh
 ```
-
-> **Run as your normal user** (e.g. `pi`), **not as root**.  Running as root
-> creates root-owned files (`.venv`, token cache) that the regular desktop
-> user cannot access, and some browsers (e.g. Chromium) refuse to launch as
-> root.  `setup.sh` will warn and prompt if it detects a root session.
 
 The script installs system packages, creates a Python virtual environment, and
 installs Python dependencies.
@@ -87,7 +82,7 @@ Or edit `config.py` directly.
 ### 4 – First run / re-authorisation
 
 ```bash
-chmod +x start.sh && ./start.sh
+chmod +x start.sh && sudo ./start.sh
 ```
 
 `start.sh` loads `.env` (if present), checks prerequisites, and then launches
@@ -97,11 +92,10 @@ chmod +x start.sh && ./start.sh
 .venv/bin/python main.py
 ```
 
-On the first run (or after a token expires and cannot be refreshed) a browser
-window opens for Google OAuth 2.0 authorisation.  If no browser is installed
-(e.g. a minimal or headless Pi), the authorization URL is displayed
-full-screen on the Pi's display — scan or type it on another device (phone,
-laptop) to complete the flow.  After approval the token is
+On the first run (or after a token expires and cannot be refreshed) the OAuth
+2.0 authorization URL is displayed full-screen on the Pi's display.  Copy or
+type that URL into a browser on any device (phone, laptop, etc.) to complete
+the flow.  After approval the token is
 saved to `~/.config/pi-edge-display-node/token.json` (permissions `0600`) and
 reused on subsequent starts without any user interaction.
 
