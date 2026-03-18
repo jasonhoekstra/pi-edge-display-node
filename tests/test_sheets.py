@@ -334,11 +334,7 @@ class TestBuildService:
 
         build_service(creds)
 
-        httplib2.Http.assert_called_once()
-        call_kwargs = httplib2.Http.call_args
-        assert call_kwargs[1].get("timeout") or call_kwargs[0], \
-            "httplib2.Http should be called with a timeout argument"
-
+        httplib2.Http.assert_called_once_with(timeout=30)
         google_auth_httplib2.AuthorizedHttp.assert_called_once()
 
 
