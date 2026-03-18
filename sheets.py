@@ -15,15 +15,19 @@ import logging
 from datetime import datetime
 from typing import Any
 
+import httplib2
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from config import (
+    API_MAX_RETRIES,
     COL_END_DT,
     COL_MESSAGE,
     COL_START_DT,
     CONFIGURATION_SHEET_NAME,
     DATETIME_FORMATS,
+    HTTP_TIMEOUT_SECONDS,
     SHEET_NAME,
 )
 
@@ -37,14 +41,18 @@ def build_service(credentials):
     Return an authorised Google Sheets API service object.
 
     The underlying HTTP transport uses TLS (via ``httplib2`` / ``google-auth``)
-    with certificate verification enabled.
+    with certificate verification enabled.  A custom timeout is configured
+    via :data:`config.HTTP_TIMEOUT_SECONDS` so that requests on slow networks
+    (e.g. Raspberry Pi on Wi-Fi) are less likely to time out prematurely.
 
     Parameters
     ----------
     credentials:
         Valid :class:`google.oauth2.credentials.Credentials` instance.
     """
-    return build("sheets", "v4", credentials=credentials)
+    http = httplib2.Http(timeout=HTTP_TIMEOUT_SECONDS)
+    authorized_http = AuthorizedHttp(credentials, http=http)
+    return build("sheets", "v4", http=authorized_http)
 
 
 # ── Data fetching ──────────────────────────────────────────────────────────────
@@ -78,7 +86,7 @@ def fetch_all_messages(service, spreadsheet_id: str, sheet_name: str = SHEET_NAM
                 spreadsheetId=spreadsheet_id,
                 range=f"'{sheet_name}'!A:C",
             )
-            .execute()
+            .execute(num_retries=API_MAX_RETRIES)
         )
     except HttpError as exc:
         logger.error("Sheets API error while fetching data: %s", exc)
@@ -218,7 +226,7 @@ def fetch_configuration(
                 spreadsheetId=spreadsheet_id,
                 range=f"'{config_sheet_name}'!A:B",
             )
-            .execute()
+            .execute(num_retries=API_MAX_RETRIES)
         )
     except HttpError as exc:
         logger.error("Sheets API error while fetching configuration: %s", exc)

@@ -11,6 +11,16 @@ import pytest
 import sys
 import types
 
+# Stub httplib2
+_httplib2 = types.ModuleType("httplib2")
+_httplib2.Http = MagicMock()
+sys.modules["httplib2"] = _httplib2
+
+# Stub google_auth_httplib2
+_ga_httplib2 = types.ModuleType("google_auth_httplib2")
+_ga_httplib2.AuthorizedHttp = MagicMock()
+sys.modules["google_auth_httplib2"] = _ga_httplib2
+
 # Stub googleapiclient
 _gac = types.ModuleType("googleapiclient")
 _gac_discovery = types.ModuleType("googleapiclient.discovery")
@@ -35,6 +45,7 @@ sys.modules["googleapiclient.discovery"] = _gac_discovery
 sys.modules["googleapiclient.errors"] = _gac_errors
 
 from sheets import (  # noqa: E402
+    build_service,
     fetch_all_messages,
     fetch_configuration,
     get_active_messages,
@@ -305,5 +316,104 @@ class TestFetchConfiguration:
             .execute
             .side_effect
         ) = HttpError(MagicMock(status=403), b"Forbidden")
+        config = fetch_configuration(mock_service, "sheet-id", "Configuration")
+        assert config == {}
+
+
+# ── build_service ──────────────────────────────────────────────────────────────
+
+class TestBuildService:
+    def test_creates_authorized_http_with_timeout(self):
+        """build_service should create an httplib2.Http with the configured timeout."""
+        import httplib2
+        import google_auth_httplib2
+
+        creds = MagicMock()
+        httplib2.Http.reset_mock()
+        google_auth_httplib2.AuthorizedHttp.reset_mock()
+
+        build_service(creds)
+
+        httplib2.Http.assert_called_once()
+        call_kwargs = httplib2.Http.call_args
+        assert call_kwargs[1].get("timeout") or call_kwargs[0], \
+            "httplib2.Http should be called with a timeout argument"
+
+        google_auth_httplib2.AuthorizedHttp.assert_called_once()
+
+
+# ── num_retries on execute ─────────────────────────────────────────────────────
+
+class TestExecuteRetries:
+    def test_fetch_all_messages_passes_num_retries(self):
+        """execute() should be called with num_retries for transient error resilience."""
+        mock_service = MagicMock()
+        mock_execute = (
+            mock_service.spreadsheets()
+            .values()
+            .get()
+            .execute
+        )
+        mock_execute.return_value = {
+            "values": [
+                ["Message", "Start", "End"],
+                ["Msg", "2024-01-01", "2024-12-31"],
+            ]
+        }
+
+        fetch_all_messages(mock_service, "sheet-id", "Sheet1")
+
+        mock_execute.assert_called_once()
+        call_kwargs = mock_execute.call_args[1]
+        assert "num_retries" in call_kwargs
+        assert call_kwargs["num_retries"] >= 1
+
+    def test_fetch_configuration_passes_num_retries(self):
+        """execute() should be called with num_retries for transient error resilience."""
+        mock_service = MagicMock()
+        mock_execute = (
+            mock_service.spreadsheets()
+            .values()
+            .get()
+            .execute
+        )
+        mock_execute.return_value = {
+            "values": [["AGENCY_NAME", "Test"]]
+        }
+
+        fetch_configuration(mock_service, "sheet-id", "Configuration")
+
+        mock_execute.assert_called_once()
+        call_kwargs = mock_execute.call_args[1]
+        assert "num_retries" in call_kwargs
+        assert call_kwargs["num_retries"] >= 1
+
+    def test_timeout_error_returns_empty_list(self):
+        """A socket timeout should be caught and return an empty list."""
+        import socket
+
+        mock_service = MagicMock()
+        (
+            mock_service.spreadsheets()
+            .values()
+            .get()
+            .execute
+            .side_effect
+        ) = socket.timeout("timed out")
+        rows = fetch_all_messages(mock_service, "sheet-id", "Sheet1")
+        assert rows == []
+
+    def test_timeout_error_on_configuration_returns_empty_dict(self):
+        """A socket timeout should be caught and return an empty dict."""
+        import socket
+
+        mock_service = MagicMock()
+        (
+            mock_service.spreadsheets()
+            .values()
+            .get()
+            .execute
+            .side_effect
+        ) = socket.timeout("timed out")
         config = fetch_configuration(mock_service, "sheet-id", "Configuration")
         assert config == {}

@@ -56,6 +56,12 @@ BACKGROUND_COLOR = "#000000"
 TEXT_COLOR = "#FFFFFF"
 TITLE_TEXT = os.environ.get("TITLE_TEXT", "Bulletin Board")
 
+# ── Network / API resilience ──────────────────────────────────────────────────
+# Timeout (in seconds) for individual HTTP requests to the Sheets API.
+HTTP_TIMEOUT_SECONDS = int(os.environ.get("HTTP_TIMEOUT_SECONDS", "30"))
+# Number of automatic retries for transient errors (socket timeouts, HTTP 5xx).
+API_MAX_RETRIES = int(os.environ.get("API_MAX_RETRIES", "3"))
+
 # ── Security / SSL settings ───────────────────────────────────────────────────
 # Always verify TLS certificates; never set to False in production.
 SSL_VERIFY = True
